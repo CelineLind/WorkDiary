@@ -39,7 +39,7 @@ def update_database(new_entry, date_to_update, connection=None):
     if connection is None:
         connection = open_connection()
     cursor = connection.cursor()
-    cursor.execute(f"UPDATE diary SET entry = ? WHERE date = ?", (new_entry, date_to_update,))
+    cursor.execute("UPDATE diary SET entry = ? WHERE date = ?", (new_entry, date_to_update,))
     connection.commit()
     close_connection(connection)
 
@@ -49,18 +49,26 @@ def insert_into_database(new_entry, date_to_add, connection=None):
     if connection is None:
         connection = open_connection()
     cursor = connection.cursor()
-    cursor.execute(f"INSERT INTO diary (date, entry) VALUES (?, ?)", (date_to_add, new_entry,))
+    cursor.execute("INSERT INTO diary (date, entry) VALUES (?, ?)", (date_to_add, new_entry,))
     connection.commit()
     close_connection(connection)
 
 
-def does_entry_exist(date_to_check, connection=None):
-    ''' Checks if entry for date already exists '''
+def get_entry(date_to_check, connection=None, close_conn=False):
+    ''' Get an entry on a date '''
     if connection is None:
         connection = open_connection()
     cursor = connection.cursor()
     cursor.execute("SELECT entry FROM diary WHERE date = ?", (date_to_check,))
     data = cursor.fetchall()
+    if close_conn:
+        close_connection(connection)
+    return data
+
+
+def does_entry_exist(date_to_check, connection=None):
+    ''' Checks if entry for date already exists '''
+    data = get_entry(date_to_check, connection)
     if data == []: return False
     else: return True
 
@@ -84,11 +92,11 @@ def submit_today(input_text):
     if entry_exists:
         update_database(new_entry=input_text, date_to_update=today, connection=connection)
         print("Entry updated.")
-        return "Entry updated."
+        return "Entry updated.", input_text
     else: 
         insert_into_database(new_entry=input_text, date_to_add=today, connection=connection)
         print("Entry saved.")
-        return "Entry saved."
+        return "Entry saved.", input_text
 
 
 ## UI Layout
@@ -100,16 +108,20 @@ with gr.Blocks() as home:
     # Today tab layout
     with gr.Tab("Today"):
         gr.Markdown("What did you do today?")
-        input_text = gr.Textbox(label="Today I...")
+        todays_entry = get_entry(date_to_check=todays_date(), close_conn=True)[0][0]
+
+        input_text = gr.Textbox(todays_entry, label="Today I...")
         updatebtn = gr.Button("Save")
         display_output = gr.Markdown()
+
         # Submit/Update entry
-        updatebtn.click(submit_today, inputs=input_text, outputs=display_output)
+        updatebtn.click(submit_today, inputs=input_text, outputs=[display_output, input_text])
 
     # Select date tab layout
     with gr.Tab("Select Date"):
         gr.Markdown("Select Date")
 
+    # Buttons along bottom
     with gr.Row(equal_height=True):
         exportbtn = gr.Button("Export current entry")
         multiplebtn = gr.Button("Export multiple dates") # TODO: perhaps own tab/advanced section?
