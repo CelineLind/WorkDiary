@@ -15,6 +15,7 @@ def open_connection():
         print(f"The error '{e}' occurred.")
     return connection
 
+
 def close_connection(conn):
     ''' Close database connection '''
     try:
@@ -23,29 +24,51 @@ def close_connection(conn):
     except sqlite3.Error as e:
         print(f"The error '{e}' occurred.")
 
+
 def setup_database():
     ''' Setup database, if not already '''
     connection = open_connection()
     cursor = connection.cursor()
     cursor.execute("CREATE TABLE IF NOT EXISTS diary (date DATE, entry TEXT)")
+    connection.commit()
     close_connection(connection)
 
-def update_database(date_to_update, new_entry):
+
+def update_database(new_entry, date_to_update, connection=None):
     ''' Update entry in database '''
-    connection = open_connection()
+    if connection is None:
+        connection = open_connection()
     cursor = connection.cursor()
-    cursor.execute(f"UPDATE diary SET entry = '{new_entry}' WHERE date = '{date_to_update}'")
+    cursor.execute(f"UPDATE diary SET entry = ? WHERE date = ?", (new_entry, date_to_update,))
+    connection.commit()
     close_connection(connection)
 
-def does_entry_exist():
+
+def insert_into_database(new_entry, date_to_add, connection=None):
+    ''' Insert entry in database '''
+    if connection is None:
+        connection = open_connection()
+    cursor = connection.cursor()
+    cursor.execute(f"INSERT INTO diary (date, entry) VALUES (?, ?)", (date_to_add, new_entry,))
+    connection.commit()
+    close_connection(connection)
+
+
+def does_entry_exist(date_to_check, connection=None):
     ''' Checks if entry for date already exists '''
-    pass
+    if connection is None:
+        connection = open_connection()
+    cursor = connection.cursor()
+    cursor.execute("SELECT entry FROM diary WHERE date = ?", (date_to_check,))
+    data = cursor.fetchall()
+    if data == []: return False
+    else: return True
 
 
 ## Helpers
 def todays_date():
     ''' Returns todays date in YYYY-MM-DD format '''
-    return datetime.today().strftime('%Y-%m-%d')
+    return str(datetime.today().strftime('%Y-%m-%d'))
 
 def yesterdays_date():
     ''' Returns yesterdays date in YYYY-MM-DD format'''
@@ -53,11 +76,19 @@ def yesterdays_date():
 
 
 ## Functionality
-def submit(input_text):
-    # TODO: check if entry exists, then save/update input_text in database
-    entry_exists = False
-    if entry_exists: return "Entry updated."
-    else: return "Entry saved."
+def submit_today(input_text):
+    connection = open_connection()
+    today = todays_date()
+    entry_exists = does_entry_exist(today, connection)
+
+    if entry_exists:
+        update_database(new_entry=input_text, date_to_update=today, connection=connection)
+        print("Entry updated.")
+        return "Entry updated."
+    else: 
+        insert_into_database(new_entry=input_text, date_to_add=today, connection=connection)
+        print("Entry saved.")
+        return "Entry saved."
 
 
 ## UI Layout
@@ -73,7 +104,7 @@ with gr.Blocks() as home:
         updatebtn = gr.Button("Save")
         display_output = gr.Markdown()
         # Submit/Update entry
-        updatebtn.click(submit, inputs=input_text, outputs=display_output)
+        updatebtn.click(submit_today, inputs=input_text, outputs=display_output)
 
     # Select date tab layout
     with gr.Tab("Select Date"):
