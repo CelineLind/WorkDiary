@@ -1,6 +1,7 @@
 import gradio as gr
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
+import os
 
 database_path = "database.db"
 
@@ -27,11 +28,15 @@ def close_connection(conn):
 
 def setup_database():
     ''' Setup database, if not already '''
-    connection = open_connection()
-    cursor = connection.cursor()
-    cursor.execute("CREATE TABLE IF NOT EXISTS diary (date DATE, entry TEXT)")
-    connection.commit()
-    close_connection(connection)
+    if not os.path.isfile(database_path):
+        connection = open_connection()
+        cursor = connection.cursor()
+        cursor.execute("CREATE TABLE IF NOT EXISTS diary (date DATE, entry TEXT)")
+        connection.commit()
+        close_connection(connection)
+        print("Database setup.")
+    else:
+        print("Database found.")
 
 
 def update_database(new_entry, date_to_update, connection=None):
@@ -66,9 +71,9 @@ def get_entry(date_to_check, connection=None, close_conn=False):
     return data
 
 
-def does_entry_exist(date_to_check, connection=None):
+def does_entry_exist(date_to_check, connection=None, close_conn=False):
     ''' Checks if entry for date already exists '''
-    data = get_entry(date_to_check, connection)
+    data = get_entry(date_to_check, connection, close_conn)
     if data == []: return False
     else: return True
 
@@ -80,7 +85,17 @@ def todays_date():
 
 def yesterdays_date():
     ''' Returns yesterdays date in YYYY-MM-DD format'''
-    pass
+    return str((datetime.now() - timedelta(1)).strftime('%Y-%m-%d'))
+
+def submit(entry_exists, entry, date, conn):
+    if entry_exists:
+        update_database(new_entry=entry, date_to_update=date, connection=conn)
+        print("Entry updated.")
+        return "Entry updated.", input_text
+    else: 
+        insert_into_database(new_entry=entry, date_to_add=date, connection=conn)
+        print("Entry saved.")
+        return "Entry saved.", input_text
 
 
 ## Functionality
@@ -88,28 +103,45 @@ def submit_today(input_text):
     connection = open_connection()
     today = todays_date()
     entry_exists = does_entry_exist(today, connection)
+    return submit(entry_exists, input_text, today, connection)
 
-    if entry_exists:
-        update_database(new_entry=input_text, date_to_update=today, connection=connection)
-        print("Entry updated.")
-        return "Entry updated.", input_text
-    else: 
-        insert_into_database(new_entry=input_text, date_to_add=today, connection=connection)
-        print("Entry saved.")
-        return "Entry saved.", input_text
+def submit_yesterday(input_text):
+    connection = open_connection()
+    yesterday = yesterdays_date()
+    entry_exists = does_entry_exist(yesterday, connection)
+    return submit(entry_exists, input_text, yesterday, connection)
+    
 
 
 ## UI Layout
 with gr.Blocks() as home:
     # Yesterday tab layout
     with gr.Tab("Yesterday"):
-        gr.Markdown("Yesterday")
+        gr.Markdown("What did you do yesterday?")
+        yesterdays_entry = get_entry(date_to_check=yesterdays_date(), close_conn=True)
+        if yesterdays_entry == []:
+            yesterdays_entry = ''
+        else:
+            yesterdays_entry = yesterdays_entry[0]
+
+        # User input
+        input_text = gr.Textbox(yesterdays_entry, label="Yesterday I...")
+        updatebtn = gr.Button("Save")
+        display_output = gr.Markdown()
+
+        # Submit/Update entry
+        updatebtn.click(submit_yesterday, inputs=input_text, outputs=[display_output, input_text])
 
     # Today tab layout
     with gr.Tab("Today"):
         gr.Markdown("What did you do today?")
-        todays_entry = get_entry(date_to_check=todays_date(), close_conn=True)[0][0]
+        todays_entry = get_entry(date_to_check=todays_date(), close_conn=True)[0]
+        if todays_entry == []:
+            todays_entry = ''
+        else:
+            todays_entry = todays_entry[0]
 
+        # User input
         input_text = gr.Textbox(todays_entry, label="Today I...")
         updatebtn = gr.Button("Save")
         display_output = gr.Markdown()
@@ -126,6 +158,7 @@ with gr.Blocks() as home:
         exportbtn = gr.Button("Export current entry")
         multiplebtn = gr.Button("Export multiple dates") # TODO: perhaps own tab/advanced section?
         searchbtn = gr.Button("AI search") # TODO: perhaps own tab/advanced section?
+
 
 if __name__ == "__main__":
     setup_database()

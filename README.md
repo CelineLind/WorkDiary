@@ -10,6 +10,6 @@ University students, academics, angsty teens, and employed people.
 `gradio app.py --demo-name=home`
 
 ### To-do  
-* Save/update a result in the db for today's date
-* Save/update a result in the db for yesterday's date
+* After text is submitted, textbox displays just-submitted text still
 * Refactor db code into own file
+* Today tab is auto-selected
